@@ -80,6 +80,6 @@ Run server in one terminal and the client in the other.
 
 ## Read/Watch list
 
-[1] https://www.youtube.com/watch?v=C-kWVb81tCc
-[2] https://noiseprotocol.org/noise.html
-[3] https://noiseprotocol.org/specs/noisesocket.html
+- [1] https://www.youtube.com/watch?v=C-kWVb81tCc
+- [2] https://noiseprotocol.org/noise.html
+- [3] https://noiseprotocol.org/specs/noisesocket.html
