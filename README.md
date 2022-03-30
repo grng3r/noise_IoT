@@ -63,11 +63,11 @@ The communication can be observed on any platform with Wireshark looking at the 
 
 ## Setup
 
-Create pyhon virtual environment with (depending on your system you might have to change python3 to python and pip3 to pip):
+Create python virtual environment with (depending on your system you might have to change python3 to python and pip3 to pip):
 ```
     python3 -m venv venv
     source venv/bin/activate
-    pip3 install requirements.tx
+    pip3 install -r requirements.txt
 ```
 
 and change the shebang line in the scripts.
