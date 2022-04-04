@@ -13,6 +13,7 @@ RUN apk update && \
     apk add libffi-dev && \
     apk add --no-cache git && \
     apk add tcpdump && \
+	apk add --upgrade nano && \
     mkdir /app
 
 SHELL ["/bin/bash", "-c"]
@@ -21,7 +22,9 @@ SHELL ["/bin/bash", "-c"]
 COPY requirements.txt /app/requirements.txt
 
 RUN apk add py3-pip && \
-	python3 -m pip install scapy-python3
+	python3 -m pip install --pre scapy[basic]
+
+#pip install scapy-python3
 
 WORKDIR /app
 
