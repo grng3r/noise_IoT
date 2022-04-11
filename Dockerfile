@@ -20,6 +20,9 @@ SHELL ["/bin/bash", "-c"]
 
 #COPY venv /app/venv
 COPY requirements.txt /app/requirements.txt
+COPY server_noise.py /app/server_noise.py
+COPY client_noise.py /app/client_noise.py
+COPY noise_prot_interface.py /app/noise_prot_interface.py
 
 RUN apk add py3-pip && \
 	python3 -m pip install --pre scapy[basic]
@@ -28,9 +31,12 @@ RUN apk add py3-pip && \
 
 WORKDIR /app
 
-COPY cli.py /app/cly.py
-COPY server.py /app/server.py
+# COPY cli.py /app/cly.py
+# server.py /app/server.py
 
+#server noise protocol
+EXPOSE 2000
+EXPOSE 22
 
 RUN python3 -m pip install -r requirements.txt
 
