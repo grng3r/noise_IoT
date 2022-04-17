@@ -6,6 +6,7 @@ from scapy.contrib.mqtt import *
 from scapy.all import *
 from mqtt_broker import Credentials
 import socket
+import sys, getopt
 
 def read_file(f_name):
     with open(f_name, 'r') as f:
@@ -21,16 +22,46 @@ class MQTTClient:
         self.client = noise_prot_interface.NoiseProtocolClient()
 
 
-    def _connect(self, srcIP, dstIP):
-        pkt = IP(src = srcIP, dst = dstIP)
+    def syn_ack(self, srcIP, dstIP):
+        #syn
+        ip = IP(src = srcIP, dst = dstIP)
+        syn = TCP(sport = self.tcpport, dport = self.tcpport, flags = 's', seq = 1000)
+        self.client.sendMessage(syn)
+        syn_ack = self.client.getMessage()
+        #ack
+        ack = TCP(sport = self.tcpport, dport = self.tcpport, seq = syn_ack.ack, ack = syn_ack.seq + 1)
+        self.client.sendMessage(ack)
+
+    #def tcp_fin(self):
+
+    def _connect(self):
         self.client.connect()
-        mqtt = MQTTConnect(username = username, password = Credentials().hash_pwd(self.salt, self.password))
+        mqtt = MQTT()/MQTTConnect(username = username, password = Credentials().hash_pwd(self.salt, self.password))
         self.client.sendMessage(mqtt)
         return self.client.getMessage()
 
 
-    #def _subscribe():
-    #def _publish()
+    def _subscribe(self, topics = []):
+        mqtt = MQTT(QOS=2)/MQTTSubscribe(topics = topics)
+        self.client.sendMessage(mqtt)
+        return self.client.getMessage()
+
+
+    def _publish(self, topic, value):
+        mqtt = MQTT()/MQTTPublish(topic = topic, value = value)
+        self.client.sendMessage(mqtt)
+        return self.client.getMessage()
+
+    def _ping(self):
+        mqtt = MQTT(type = 12)
+        self.client.sendMessage(mqtt)
+        return self.client.getMessage()
+
+    def _disconnect(self):
+        mqtt = MQTT()/MQTTDisconnect()
+        self.client.sendMessage(mqtt)
+        return self.client.getMessage()
+
 
 def main():
     print("Args: %s" % (sys.argv))
@@ -51,6 +82,8 @@ def main():
             password = arg
         elif opt in ("-d", "--dst"):
             dst = arg
+        #TODO topic arg
+        #TODO pub sub arg
 
     s_ip = 'localhost' 
     client = MQTTClient('', tcpport, username, password)
