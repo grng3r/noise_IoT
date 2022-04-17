@@ -263,18 +263,15 @@ def save_to_file(data, f_name):
             f.write(data)
 
 
-def read_file(self, f_name):
-    with open(f_name, 'r') as f:
-        return f.read()
-
-
 class Credentials():
     def __init__(self):
         self.users = {}
 
     def create_salt(self, bits):
         # secrets provides a cryptographicaly secure random number generator
-        return secrets.token_bytes(bits)
+        salt = secrets.token_bytes(bits)
+        save_to_file(str(salt), 'salt')
+        return salt
 
     def hash_pwd(self, salt, pwd):
         # key derivation function "safe" from HW attacks
@@ -292,14 +289,12 @@ def main():
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hi:t:u:p:",["interface=","tcpport=","username=","password="])
     except getopt.GetoptError:
-        print ("%s -i <interface> -t <TCP port> -u <username> -p <password>" % (sys.argv[0]))
+        print ("%s -t <TCP port> -u <username> -p <password>" % (sys.argv[0]))
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ("%s -i <interface> -t <TCP port> -u <username> -p <password>" % (sys.argv[0]))
+            print ("%s -t <TCP port> -u <username> -p <password>" % (sys.argv[0]))
             sys.exit()
-        elif opt in ("-i", "--interface"):
-            interface = arg
         elif opt in ("-t", "--tcpport"):
             tcpport = int(arg)
         elif opt in ("-u", "--username"):
@@ -307,7 +302,7 @@ def main():
         elif opt in ("-p", "--password"):
             password = arg
 
-    print("Listening MQTT on interface %s (TCP port %d)" % (interface, tcpport))
+    #print("Listening MQTT on interface %s (TCP port %d)" % (interface, tcpport))
             
     salt = Credentials().create_salt(32)
 
@@ -315,7 +310,7 @@ def main():
     for u,p in users.items():
         print(u)
         print(p)
-        broker = MQTTBroker(interface, tcpport, u, p)
+        broker = MQTTBroker('', tcpport, u, p)
         broker.listen()
 
 
