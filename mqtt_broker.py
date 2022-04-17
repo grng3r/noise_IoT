@@ -254,7 +254,7 @@ class MQTTBroker:
                     tcpSeqList[index] = tcpSeqList[index] + 1
                     server.sendMessage(ip/tcpSynAck)
             except Exception as e:
-                #if socket or Noise error simply drop
+                #if socket or Noise error simply drop -> TODO might need to be processed differently
                 print(e)
                 pass
 
@@ -268,7 +268,6 @@ def read_file(self, f_name):
         return f.read()
 
 
-#TODO functions to get credentials from encrypted data in simple file
 class Credentials():
     def __init__(self):
         self.users = {}
@@ -288,7 +287,6 @@ class Credentials():
         return self.users
 
     
-#TODO main
 def main():
     print("Args: %s" % (sys.argv))
     try:
