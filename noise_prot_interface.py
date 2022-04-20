@@ -75,9 +75,10 @@ class NoiseProtocolClient:
         # As of now, the handshake should be finished (as we are using NN pattern).
         # Any further calls to write_message or read_message would raise NoiseHandshakeError exception.
         # We can use encrypt/decrypt methods of NoiseConnection now for encryption and decryption of messages.
+        return 0
     def sendMessage(self,message):
-        message_str= str(message)
-        self.sock.sendall(self.proto.encrypt(message_str.encode('utf-8')))
+        #message_str= str(message)
+        self.sock.sendall(self.proto.encrypt(message))#_str.encode('utf-8')))
     
     def getMessage(self):
         data = self.sock.recv(2048)

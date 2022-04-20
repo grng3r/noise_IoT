@@ -116,6 +116,7 @@ class MQTTBroker:
         print("[%s] NEW THREAD for client %s (TCP port %s)" % (threadName, clientIPAddress, clientTCPPort))
         while connected:
             p = server.getMessage()
+            print(p)
             # MQTT mssg
             if p.haslayer(TCP) and p.haslayer(MQTT) and p[TCP].dport == self.tcpport:
                 i = tuple(p[IP].src, p[TCP].sport)

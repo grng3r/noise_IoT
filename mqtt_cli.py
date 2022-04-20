@@ -36,13 +36,15 @@ class MQTTClient:
 
     def _connect(self):
         self.client.connect()
-        mqtt = MQTT()/MQTTConnect(username = username, password = Credentials().hash_pwd(self.salt, self.password))
-        self.client.sendMessage(mqtt)
+        mqtt = MQTT()/MQTTConnect(username = self.username.encode('utf-8'), password = Credentials().hash_pwd(bytes(self.salt, encoding='utf-8'), bytes(self.password, encoding='utf-8')))
+        print("connect packet {}".format(mqtt))
+        self.client.sendMessage(raw(mqtt))
         return self.client.getMessage()
 
 
     def _subscribe(self, topics = []):
         mqtt = MQTT(QOS=2)/MQTTSubscribe(topics = topics)
+        print("subscribe packet {}".format(mqtt))
         self.client.sendMessage(mqtt)
         return self.client.getMessage()
 
@@ -84,9 +86,10 @@ def main():
             dst = arg
         #TODO topic arg
         #TODO pub sub arg
-
+    print(password)
     s_ip = 'localhost' 
-    client = MQTTClient('', tcpport, username, password)
-    print(client._connect(s_ip, dst))
+    client = MQTTClient(username, password, '', tcpport)
+    client._connect()
+    print(client._subscribe(['topic']))
 
 main()
