@@ -1,3 +1,3 @@
 #!/bin/bash
-./mqtt_broker.py -t 2000 -u iot -p iot
+./mqtt_broker2.py -u iot -p iot
 

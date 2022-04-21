@@ -43,9 +43,10 @@ class MQTTClient:
 
 
     def _subscribe(self, topics = []):
+        self.client.connect()
         mqtt = MQTT(QOS=2)/MQTTSubscribe(topics = topics)
-        print("subscribe packet {}".format(mqtt))
-        self.client.sendMessage(mqtt)
+        print("subscribe packet {}".format(raw(mqtt)))
+        self.client.sendMessage(raw(mqtt))
         return self.client.getMessage()
 
 
@@ -86,10 +87,10 @@ def main():
             dst = arg
         #TODO topic arg
         #TODO pub sub arg
-    print(password)
+    #print(password)
     s_ip = 'localhost' 
     client = MQTTClient(username, password, '', tcpport)
-    client._connect()
+    print(client._connect())
     print(client._subscribe(['topic']))
 
 main()

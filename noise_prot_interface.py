@@ -77,8 +77,8 @@ class NoiseProtocolClient:
         # We can use encrypt/decrypt methods of NoiseConnection now for encryption and decryption of messages.
         return 0
     def sendMessage(self,message):
-        #message_str= str(message)
-        self.sock.sendall(self.proto.encrypt(message))#_str.encode('utf-8')))
+        message_str= str(message)
+        self.sock.sendall(self.proto.encrypt(message_str.encode('utf-8')))
     
     def getMessage(self):
         data = self.sock.recv(2048)

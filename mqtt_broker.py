@@ -116,108 +116,110 @@ class MQTTBroker:
         print("[%s] NEW THREAD for client %s (TCP port %s)" % (threadName, clientIPAddress, clientTCPPort))
         while connected:
             p = server.getMessage()
-            print(p)
-            # MQTT mssg
-            if p.haslayer(TCP) and p.haslayer(MQTT) and p[TCP].dport == self.tcpport:
-                i = tuple(p[IP].src, p[TCP].sport)
-                print("[%s] %s MQTT packet type: %d" % (threadName, i, p[MQTT].type))
-                print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
-                tcpAckList[index] = tcpAckList[index] + len(p[MQTT])
+            if p == None:
+                print("Connected")
+            else:
+                # MQTT mssg
+                if p.haslayer(TCP) and p.haslayer(MQTT) and p[TCP].dport == self.tcpport:
+                    i = tuple(p[IP].src, p[TCP].sport)
+                    print("[%s] %s MQTT packet type: %d" % (threadName, i, p[MQTT].type))
+                    print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
+                    tcpAckList[index] = tcpAckList[index] + len(p[MQTT])
 
-                # Send ACK
-                if not p[TCP].flags & 0x01 == 0x01:
-                    # Normal ACK
-                    ack = self._ack_p(p)
-                    server.sendMessage(ack)
-                else:
-                    # FIN received, sending FIN+ACK (this happens with the MQTT DISCONNECT message, which does not require an MQTT response)
+                    # Send ACK
+                    if not p[TCP].flags & 0x01 == 0x01:
+                        # Normal ACK
+                        ack = self._ack_p(p)
+                        server.sendMessage(ack)
+                    else:
+                        # FIN received, sending FIN+ACK (this happens with the MQTT DISCONNECT message, which does not require an MQTT response)
+                        connected = False
+                        print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
+                        tcpAckList[index] = tcpAckList[index] + 1
+                        fin_ack = self._ack_rclose(p, connected)
+                        server.sendMessage(fin_ack)
+
+                    if p[MQTT].type == 1:
+                        #MQTT CONNECT received, sending MQTT CONNACK
+                        keep_alive = p[MQTT].klive
+                        ip = IP(src = p[IP].dst, dst = p[IP].src)
+                        tcp = TCP(sport = self.tcpport, dport = p[TCP].sport, flags = 'A', seq = tcpSeqList[i], ack = tcpAckList[i])
+                        if p[MQTT].username.decode('utf-8') == self.username and p[MQTT].password.decode('utf-8') == self.password:
+                            mqtt = MQTT()/MQTTConnack(sessPresentFlag = 1, retcode = 5)
+                            print("[%s] %s MQTT CONNECT received, wrong user/password" % (threadName, i))
+                        server.sendMessage(ip/tcp/mqtt)
+                        tcpSeqList[i] = tcpSeqList[i] + len(mqtt)
+
+                    elif p[MQTT].type == 3:
+                        # MQTT PUBLISH received
+                        topic = p[MQTT][1].topic
+                        message = p[MQTT][1].value
+                        print("[%s] %s MQTT PUBLISH received, topic=%s, message=%s" % (threadName, i, topic, message))
+                        #Broadcast MQTT PUBLISH to subscriber connected to the server
+                        self._broadcast_topic_mssg(p, topic.decode('utf-8'), message.decode('utf-8'))
+
+                    elif p[MQTT].type == 8:
+                        # MQTT SUBSCRIBE received, sending MQTT SUBACK
+                        topic = p[MQTT][2].topic
+                        QOS = p[MQTT][2].QOS
+                        ipAdd = p[IP].src
+                        tcpPort = p[TCP].sport
+                        print("[%s] %s MQTT SUBSCRIBE received, topic=%s, QoS=%d" % (threadName, index, topic, QOS))
+
+                        # add subscribers to topics
+                        with subscribersForTopic_lock:
+                            if topic.decode('utf-8') in subscribersForTopic:
+                                subscribersForTopic = subscribersForTopic[topic.decode('utf-8')]
+                                subscribersForTopic.append([ipAdd, tcpPort, QOS])
+                            else:
+                                subscribersForTopic[topic.decode('utf-8')] = [[ipAdd, tcpPort, QOS]]
+                        print("[%s] %s Subscribers list for this topic: %s" % (threadName, index, subscribersForTopic[topic.decode('utf-8')]))
+                        print("[%s] %s TOPICS-SUBSCRIBERS list:         %s" % (threadName, index, subscribersForTopic))
+
+                        ip = IP(src = p[IP].dst, dst = p[IP].src)
+                        tcp = TCP(sport = self.tcpport, dport = p[TCP].sport, flags = 'A', seq = tcpSeqList[i], ack = tcpAckList[i])
+                        mqtt = MQTT()/MQTTSuback(msgid = p[MQTT].msgid, retcode = QOS)
+                        tcpSeqList[i] = tcpSeqList[i] + len(mqtt)
+
+                        # Create a timer. If there is a timeout (PING REQUEST not received), the client is assumed to be disconnected.
+                        print("[%s] %s KEEP ALIVE timer started!!!" % (threadName, index))
+                        t = Timer(keepAlive+10, self._timerExpiration, args=(p, connected,))
+                        t.start()
+
+                    elif p[MQTT].type == 12:
+                        #PING request received, sending MQTT PING response
+                        ip = IP(src = p[IP].dst, dst = p[IP].src)
+                        tcp = TCP(sport = self.tcpport, dport = p[TCP].sport, flags = 'A', seq = tcpSeqList[i], ack = tcpAckList[i])
+                        mqtt = MQTT(type = 13, len = 0)
+                        server.sendMessage(ip/tcp/mqtt)
+                        tcpSeqList[i] = tcpSeqList[i] + len(mqtt)
+
+                        # restart timer
+                        print("[%s] %s Keep alive timer restarted!!!" % (threadName, index))
+                        t.cancel()
+                        t = Timer(keepAlive+10, self._timerExpiration, args=(p, connected,))
+                        t.start()
+
+                    elif p[MQTT].type == 14:
+                        print("[%s] %s MQTT DISCONNECT REQ received" % (threadName, index))
+                        self._disconnect(p[IP].dst, p[IP].src, p[TCP].sport, connected)
+                # TCP FIN received, sending TCP FIN+ACK
+                elif p.haslayer(TCP) and p[TCP].dport == self.tcpport and p[TCP].flags & FIN:
+                    i = tuple([p[IP].src,p[TCP].sport])
+                    print ("[%s] %s TCP FIN received" % (threadName, i))
+
                     connected = False
                     print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
-                    tcpAckList[index] = tcpAckList[index] + 1
-                    fin_ack = self._ack_rclose(p, connected)
-                    server.sendMessage(fin_ack)
+                    tcpAckList[index] = tcpAckList[i] + 1
+                    self._ack_rclose(p, connected)
 
-                if p[MQTT].type == 1:
-                    #MQTT CONNECT received, sending MQTT CONNACK
-                    keep_alive = p[MQTT].klive
-                    ip = IP(src = p[IP].dst, dst = p[IP].src)
-                    tcp = TCP(sport = self.tcpport, dport = p[TCP].sport, flags = 'A', seq = tcpSeqList[i], ack = tcpAckList[i])
-                    if p[MQTT].username.decode('utf-8') == self.username and p[MQTT].password.decode('utf-8') == self.password:
-                        mqtt = MQTT()/MQTTConnack(sessPresentFlag = 1, retcode = 5)
-                        print("[%s] %s MQTT CONNECT received, wrong user/password" % (threadName, i))
-                    server.sendMessage(ip/tcp/mqtt)
-                    tcpSeqList[i] = tcpSeqList[i] + len(mqtt)
+                # TCP ACK received
+                elif p.haslayer(TCP) and p[TCP].dport == self.tcpport and p[TCP].flags & ACK:
+                    i = tuple([p[IP].src,p[TCP].sport])
+                    print ("[%s] %s TCP ACK received!" % (threadName, i)) # Do nothing
 
-                elif p[MQTT].type == 3:
-                    # MQTT PUBLISH received
-                    topic = p[MQTT][1].topic
-                    message = p[MQTT][1].value
-                    print("[%s] %s MQTT PUBLISH received, topic=%s, message=%s" % (threadName, i, topic, message))
-                    #Broadcast MQTT PUBLISH to subscriber connected to the server
-                    self._broadcast_topic_mssg(p, topic.decode('utf-8'), message.decode('utf-8'))
-
-                elif p[MQTT].type == 8:
-                    # MQTT SUBSCRIBE received, sending MQTT SUBACK
-                    topic = p[MQTT][2].topic
-                    QOS = p[MQTT][2].QOS
-                    ipAdd = p[IP].src
-                    tcpPort = p[TCP].sport
-                    print("[%s] %s MQTT SUBSCRIBE received, topic=%s, QoS=%d" % (threadName, index, topic, QOS))
-
-                    # add subscribers to topics
-                    with subscribersForTopic_lock:
-                        if topic.decode('utf-8') in subscribersForTopic:
-                            subscribersForTopic = subscribersForTopic[topic.decode('utf-8')]
-                            subscribersForTopic.append([ipAdd, tcpPort, QOS])
-                        else:
-                            subscribersForTopic[topic.decode('utf-8')] = [[ipAdd, tcpPort, QOS]]
-                    print("[%s] %s Subscribers list for this topic: %s" % (threadName, index, subscribersForTopic[topic.decode('utf-8')]))
-                    print("[%s] %s TOPICS-SUBSCRIBERS list:         %s" % (threadName, index, subscribersForTopic))
-
-                    ip = IP(src = p[IP].dst, dst = p[IP].src)
-                    tcp = TCP(sport = self.tcpport, dport = p[TCP].sport, flags = 'A', seq = tcpSeqList[i], ack = tcpAckList[i])
-                    mqtt = MQTT()/MQTTSuback(msgid = p[MQTT].msgid, retcode = QOS)
-                    tcpSeqList[i] = tcpSeqList[i] + len(mqtt)
-
-                    # Create a timer. If there is a timeout (PING REQUEST not received), the client is assumed to be disconnected.
-                    print("[%s] %s KEEP ALIVE timer started!!!" % (threadName, index))
-                    t = Timer(keepAlive+10, self._timerExpiration, args=(p, connected,))
-                    t.start()
-
-                elif p[MQTT].type == 12:
-                    #PING request received, sending MQTT PING response
-                    ip = IP(src = p[IP].dst, dst = p[IP].src)
-                    tcp = TCP(sport = self.tcpport, dport = p[TCP].sport, flags = 'A', seq = tcpSeqList[i], ack = tcpAckList[i])
-                    mqtt = MQTT(type = 13, len = 0)
-                    server.sendMessage(ip/tcp/mqtt)
-                    tcpSeqList[i] = tcpSeqList[i] + len(mqtt)
-
-                    # restart timer
-                    print("[%s] %s Keep alive timer restarted!!!" % (threadName, index))
-                    t.cancel()
-                    t = Timer(keepAlive+10, self._timerExpiration, args=(p, connected,))
-                    t.start()
-
-                elif p[MQTT].type == 14:
-                    print("[%s] %s MQTT DISCONNECT REQ received" % (threadName, index))
-                    self._disconnect(p[IP].dst, p[IP].src, p[TCP].sport, connected)
-            # TCP FIN received, sending TCP FIN+ACK
-            elif p.haslayer(TCP) and p[TCP].dport == self.tcpport and p[TCP].flags & FIN:
-                i = tuple([p[IP].src,p[TCP].sport])
-                print ("[%s] %s TCP FIN received" % (threadName, i))
-
-                connected = False
-                print("[%s] tcpAckList: %s" % (threadName, tcpAckList))
-                tcpAckList[index] = tcpAckList[i] + 1
-                self._ack_rclose(p, connected)
-
-            # TCP ACK received
-            elif p.haslayer(TCP) and p[TCP].dport == self.tcpport and p[TCP].flags & ACK:
-                i = tuple([p[IP].src,p[TCP].sport])
-                print ("[%s] %s TCP ACK received!" % (threadName, i)) # Do nothing
-
-        self._mqttServerThread = None
-        print('[%s] MQTT server thread stopped' % (threadName))
+            self._mqttServerThread = None
+            print('[%s] MQTT server thread stopped' % (threadName))
 
 
     def _start_mqttServerForThisClientThread(self, clientIPAddress, clientTCPPort, server):
@@ -239,16 +241,16 @@ class MQTTBroker:
                 if synPacket != '':
                     print ("[MAIN] NEW CONNECTION: Received TCP SYN from %s (TCP port %s)" % (synPacket[IP].src, synPacket[TCP].sport))
                     # Create TCP SYN+ACK packet
-                    sport = synPacket[TCP].sport
-                    index = tuple([synPacket[IP].src,synPacket[TCP].sport])
-                    tcpSeqList[index] = random.getrandbits(32) # Random number of 32 bits
-                    tcpAckList[index] = synPacket[TCP].seq + 1 # SYN+ACK
+                    #sport = synPacket[TCP].sport
+                    #index = tuple([synPacket[IP].src,synPacket[TCP].sport])
+                    #tcpSeqList[index] = random.getrandbits(32) # Random number of 32 bits
+                    #tcpAckList[index] = synPacket[TCP].seq + 1 # SYN+ACK
                     print("[MAIN] tcpAckList: %s" % (tcpAckList))
 
                     # Generating the IP layer
-                    ip = IP(src=synPacket[IP].dst, dst=synPacket[IP].src)
+                    #ip = IP(src=synPacket[IP].dst, dst=synPacket[IP].src)
                     # Generating the TCP layer
-                    tcpSynAck = TCP(sport=self.tcpport, dport=sport, flags="SA", seq=tcpSeqList[index], ack=tcpAckList[index], options=[('MSS', 1460)])
+                    #tcpSynAck = TCP(sport=self.tcpport, dport=sport, flags="SA", seq=tcpSeqList[index], ack=tcpAckList[index], options=[('MSS', 1460)])
                     # Start new thread for this connection
                     self._start_mqttServerForThisClientThread(synPacket[IP].src, synPacket[TCP].sport)
                     # Send SYN+ACK and receive ACK
@@ -304,15 +306,17 @@ def main():
             password = arg
 
     #print("Listening MQTT on interface %s (TCP port %d)" % (interface, tcpport))
+    server = noise_prot_interface.NoiseProtocolServer()
+    print(server.listen())
             
-    salt = Credentials().create_salt(32)
+    #salt = Credentials().create_salt(32)
 
-    users = Credentials().store(salt, username, str.encode(password))
-    for u,p in users.items():
-        print(u)
-        print(p)
-        broker = MQTTBroker('', tcpport, u, p)
-        broker.listen()
+    #users = Credentials().store(salt, username, str.encode(password))
+    #for u,p in users.items():
+        #print(u)
+        #print(p)
+        #broker = MQTTBroker('', tcpport, u, p)
+        #broker.listen()
 
 
 if __name__ == "__main__":
