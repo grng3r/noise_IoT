@@ -1,4 +1,3 @@
-#!/home/grng3r/Desktop/faks_upm/Security_IoT/proj/venv/bin/python3
 # -*- coding: utf-8 -*-
 
 import noise_prot_interface
