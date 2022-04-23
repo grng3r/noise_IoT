@@ -17,7 +17,7 @@ def cpu_temp():
 
 class MQTTClient:
     def __init__(self, username, password):
-        self.salt = read_file('salt')
+        #self.salt = read_file('salt')
         self.password = password
         self.client = noise_prot_interface.NoiseProtocolClient()
         self.username = username
@@ -37,9 +37,13 @@ class MQTTClient:
                     print(cpu_temp())
                     self.client.sendMessage("{}:{}".format(topic, cpu_temp()))
                     time.sleep(15)
-            elif cli == 'sub':
-                self.client.sendMessage('subscribe')
-                print(self.client.getMessage())
+            if cli == 'sub':
+                self.client.sendMessage('{}:subscribe'.format(topic))
+
+                while True:
+                    print(self.client.getMessage())
+                    time.sleep(5)
+
 
         else:
             return self.client.getMessage()
@@ -72,6 +76,6 @@ def main():
     s_ip = 'localhost'
     while True:
         msg = MQTTClient(username, password).cli(cli, topic, int(port))
-    print(msg)
+        print(msg)
 
 main()
