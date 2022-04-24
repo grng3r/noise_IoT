@@ -1,4 +1,11 @@
-# Noise protocol summary
+# Noise IoT Project
+
+## Authors
+ - Jaime Galán Martínez
+ - Mario Vuksa
+ - Víctor Aranda López
+
+## Noise protocol summary
 
 Noise is a protocol framework for 2 party secure-channel protocols. It provides a simple pattern
 language and naming scheme for 2-party DH-based cryptographic handshakes, covering the different
@@ -48,15 +55,19 @@ Noise protocol are defined by their names.
 
 # Python modules
 
-For now just examples, we still need to define use cases.
+## Noise Protocol Framework - Python 3 implementation
+We used the following Noise Protocol implementation for our project: https://github.com/plizonczyk/noiseprotocol
 
-## server.py
+## noise_prot_interface.py
+Python file that has two main classes: NoiseProtocolServer and NoiseProtocolCLient.
+
+## mqtt_broker2.py
 
 Opens socket and waits for connection from client, when client connects sends message.
 
-## client.py
+## mqtt_cli2.py
 
-When establishes connection to server receives message. 
+When establishes connection to server receives message. It publishes messages about the CPU's temperature to the server.
 
 
 The communication can be observed on any platform with Wireshark looking at the loopback interface.
@@ -70,13 +81,9 @@ Create python virtual environment with (depending on your system you might have 
     pip3 install -r requirements.txt
 ```
 
-and change the shebang line in the scripts.
-Run server in one terminal and the client in the other.
-
-## TODO
-
-- select use case
-- select AKE and encryption according to use case
+Run server in one terminal and the client in the other. For doing that run the following scripts:
+- ./run_broker.sh   (python3 mqtt_broker2.py -u iot -p iot)
+- ./run_cli.sh      (python3 mqtt_cli2.py -u iot -p iot -t cpu_temp -c pub -n 2000)
 
 ## Read/Watch list
 
